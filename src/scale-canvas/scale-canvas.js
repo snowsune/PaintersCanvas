@@ -356,7 +356,7 @@ export class ScaleCanvas {
     }
 
     const totalHeightInches = maxAbove + maxBelow;
-    const captionRoom = this._items.some((item) => item.caption) ? 36 : 0;
+    const captionRoom = this._items.some((item) => item.caption) ? 20 : 0;
     const innerMaxW = Math.max(1, this.maxWidth - pad * 2 - labelGutter);
     const innerMaxH = Math.max(1, this.maxHeight - pad * 2 - captionRoom);
     const ppi = Math.min(
@@ -468,7 +468,7 @@ export class ScaleCanvas {
       ctx.textBaseline = "top";
       for (const cap of captions) {
         ctx.fillStyle = cap.color;
-        ctx.fillText(cap.text, cap.x, groundY + 8);
+        ctx.fillText(cap.text, cap.x, groundY + 4);
       }
       ctx.restore();
     }
