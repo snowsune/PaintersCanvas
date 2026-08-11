@@ -8,7 +8,7 @@ export const name = "Painter's Canvas";
 export const version = "0.1.0";
 export const author = "Vixi";
 
-export { Sprite, loadSprite } from "./sprite.js";
+export { Sprite, loadSprite, tintMask } from "./sprite.js";
 export { attachAt } from "./compose.js";
 export {
   spanPixels,

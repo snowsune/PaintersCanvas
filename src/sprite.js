@@ -11,6 +11,53 @@
  */
 
 /**
+ * You can use the black mask for tint/color
+ *
+ * @param {CanvasImageSource} source
+ * @param {string} color CSS color (e.g. "#c45c26", "rebeccapurple")
+ * @returns {Promise<HTMLImageElement>}
+ */
+export async function tintMask(source, color) {
+  const width =
+    /** @type {any} */ (source).naturalWidth ??
+    /** @type {any} */ (source).videoWidth ??
+    /** @type {any} */ (source).width;
+  const height =
+    /** @type {any} */ (source).naturalHeight ??
+    /** @type {any} */ (source).videoHeight ??
+    /** @type {any} */ (source).height;
+
+  if (!(width > 0 && height > 0)) {
+    throw new Error("tintMask(): source has no dimensions yet");
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("tintMask(): could not get 2d context");
+  }
+
+  ctx.drawImage(source, 0, 0);
+  ctx.globalCompositeOperation = "source-in";
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, width, height);
+
+  const image = new Image();
+  image.src = canvas.toDataURL("image/png");
+  if (image.decode) {
+    await image.decode();
+  } else {
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = () => reject(new Error("tintMask(): failed to decode"));
+    });
+  }
+  return image;
+}
+
+/**
  * Loaded sprite ready to attach / place on a canvas.
  */
 export class Sprite {
@@ -19,11 +66,14 @@ export class Sprite {
    *   name: string,
    *   image: HTMLImageElement,
    *   joints: Record<string, Joint>,
+   *   color?: string | null,
    * }} opts
    */
-  constructor({ name, image, joints }) {
+  constructor({ name, image, joints, color = null }) {
     this.name = name;
     this.image = image;
+    /** @type {string | null} */
+    this.color = color;
     /** @type {Readonly<Record<string, Joint>>} */
     this.joints = Object.freeze(
       Object.fromEntries(
@@ -57,6 +107,22 @@ export class Sprite {
       throw new Error(`Sprite "${this.name}" has no joint "${name}!"`);
     }
     return this.joints[name];
+  }
+
+  /**
+   * Recolor using an existing sprite
+   *
+   * @param {string} color
+   * @returns {Promise<Sprite>}
+   */
+  async recolor(color) {
+    const image = await tintMask(this.image, color);
+    return new Sprite({
+      name: this.name,
+      image,
+      joints: this.joints,
+      color,
+    });
   }
 }
 
@@ -115,12 +181,13 @@ function loadImage(url) {
 }
 
 /**
- * Fetch a sprite JSON, load its image, then construct and return a Sprite.
+ * Fetch a sprite JSON, load its image, optionally tint a black-on-alpha mask.
  *
  * @param {string} jsonUrl URL to the `.json` metadata file
+ * @param {{ color?: string }} [opts]
  * @returns {Promise<Sprite>}
  */
-export async function loadSprite(jsonUrl) {
+export async function loadSprite(jsonUrl, opts = {}) {
   const response = await fetch(jsonUrl);
   if (!response.ok) {
     throw new Error(`Failed to fetch sprite JSON: ${jsonUrl} (${response.status})`);
@@ -129,7 +196,12 @@ export async function loadSprite(jsonUrl) {
   const data = await response.json();
   const { name, imagePath, joints } = parseSpriteJson(data, jsonUrl);
   const imageUrl = new URL(imagePath, new URL(jsonUrl, window.location.href)).href;
-  const image = await loadImage(imageUrl);
+  let image = await loadImage(imageUrl);
 
-  return new Sprite({ name, image, joints });
+  const color = opts.color ?? null;
+  if (color) {
+    image = await tintMask(image, color);
+  }
+
+  return new Sprite({ name, image, joints, color });
 }

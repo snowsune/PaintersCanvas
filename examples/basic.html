@@ -18,8 +18,12 @@
       const ctx = canvas.getContext("2d");
 
       try {
-        const body = await loadSprite("./assets/demo-sprite-body.json");
-        const head = await loadSprite("./assets/demo-sprite-head.json");
+        const body = await loadSprite("./assets/demo-sprite-body.json", {
+          color: "#5a8f7b",
+        });
+        const head = await loadSprite("./assets/demo-sprite-head.json", {
+          color: "#c45c26",
+        });
         const sprite = await attachAt(body, head, "head", { name: "demo-sprite" });
 
         status.textContent = `${name} v${version} by ${author}: composed "${sprite.name}" (${sprite.width}x${sprite.height})`;

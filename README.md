@@ -23,9 +23,9 @@ npm install git+https://github.com/snowsune/PaintersCanvas.git
 ```js
 import { loadSprite, attachAt, createScaleCanvas } from "painters-canvas";
 
-const body = await loadSprite("./body.json");
-const head = await loadSprite("./head.json");
-const sprite = await attachAt(body, head, "head", { scale: 1.2 }); // part scale around joint
+const body = await loadSprite("./body.json", { color: "#5a8f7b" });
+const head = await loadSprite("./head.json", { color: "#c45c26" });
+const sprite = await attachAt(body, head, "head", { scale: 1.2 });
 
 const canvas = createScaleCanvas(document.getElementById("host"));
 canvas.put(sprite, { heightInches: 72, measure: "top" });
