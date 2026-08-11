@@ -119,6 +119,7 @@ export class ScaleCanvas {
    *   measure?: HeightMeasure,
    *   heightMark?: boolean,
    *   label?: string,
+   *   caption?: string,
    * }} opts
    * @returns {ScaleCanvas}
    */
@@ -134,6 +135,7 @@ export class ScaleCanvas {
       measure,
       heightMark: opts.heightMark ?? true,
       label: opts.label,
+      caption: opts.caption,
     });
     this.render();
     return this;
@@ -181,6 +183,86 @@ export class ScaleCanvas {
     this.showHeightMarks = Boolean(on);
     this.render();
     return this;
+  }
+
+  /**
+   * Snapshot the current scene as a PNG blob.
+   * Optionally re-fit into a fixed frame
+   *
+   * @param {{
+   *   maxWidth?: number,
+   *   maxHeight?: number,
+   *   pixelRatio?: number,
+   *   frameWidth?: number,
+   *   frameHeight?: number,
+   *   frameBackground?: string | null,
+   * }} [opts]
+   * @returns {Promise<Blob>}
+   */
+  async exportPngBlob(opts = {}) {
+    const prev = {
+      maxWidth: this.maxWidth,
+      maxHeight: this.maxHeight,
+      pixelRatio: this.pixelRatio,
+    };
+
+    if (typeof opts.maxWidth === "number") this.maxWidth = opts.maxWidth;
+    if (typeof opts.maxHeight === "number") this.maxHeight = opts.maxHeight;
+    if (typeof opts.pixelRatio === "number") {
+      this.pixelRatio = Math.max(1, Math.min(opts.pixelRatio, 3));
+    } else {
+      // exports should be crisp without depending on the viewer's screen
+      this.pixelRatio = 1;
+    }
+
+    try {
+      this.render();
+
+      const src = this.canvas;
+      const frameW = opts.frameWidth;
+      const frameH = opts.frameHeight;
+
+      /** @type {HTMLCanvasElement} */
+      let exportCanvas = src;
+      if (frameW && frameH) {
+        exportCanvas = document.createElement("canvas");
+        exportCanvas.width = frameW;
+        exportCanvas.height = frameH;
+        const ectx = exportCanvas.getContext("2d");
+        if (!ectx) throw new Error("exportPngBlob(): no 2d context");
+
+        const bg = opts.frameBackground ?? this.background ?? "#ffffff";
+        if (bg) {
+          ectx.fillStyle = bg;
+          ectx.fillRect(0, 0, frameW, frameH);
+        }
+
+        // canvas is already in device pixels (== css when pixelRatio is 1)
+        const sw = src.width;
+        const sh = src.height;
+        const scale = Math.min(frameW / sw, frameH / sh);
+        const dw = sw * scale;
+        const dh = sh * scale;
+        ectx.imageSmoothingEnabled = true;
+        if ("imageSmoothingQuality" in ectx) {
+          ectx.imageSmoothingQuality = "high";
+        }
+        ectx.drawImage(src, (frameW - dw) / 2, (frameH - dh) / 2, dw, dh);
+      }
+
+      const blob = await new Promise((resolve, reject) => {
+        exportCanvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error("exportPngBlob(): toBlob failed"))),
+          "image/png",
+        );
+      });
+      return blob;
+    } finally {
+      this.maxWidth = prev.maxWidth;
+      this.maxHeight = prev.maxHeight;
+      this.pixelRatio = prev.pixelRatio;
+      this.render();
+    }
   }
 
   /**
@@ -262,8 +344,9 @@ export class ScaleCanvas {
     }
 
     const totalHeightInches = maxAbove + maxBelow;
+    const captionRoom = this._items.some((item) => item.caption) ? 36 : 0;
     const innerMaxW = Math.max(1, this.maxWidth - pad * 2 - labelGutter);
-    const innerMaxH = Math.max(1, this.maxHeight - pad * 2);
+    const innerMaxH = Math.max(1, this.maxHeight - pad * 2 - captionRoom);
     const ppi = Math.min(
       innerMaxW / totalWidthInches,
       innerMaxH / totalHeightInches,
@@ -271,7 +354,7 @@ export class ScaleCanvas {
 
     const contentLeft = pad + labelGutter;
     const width = Math.ceil(totalWidthInches * ppi + contentLeft + pad);
-    const height = Math.ceil(totalHeightInches * ppi + pad * 2);
+    const height = Math.ceil(totalHeightInches * ppi + pad * 2 + captionRoom);
     this._setCanvasSize(width, height);
 
     if (this.background) {
@@ -304,6 +387,8 @@ export class ScaleCanvas {
     let cursorX = contentLeft;
     /** @type {{ slotLeft: number, widthPx: number, markY: number, label: string }[]} */
     const marks = [];
+    /** @type {{ x: number, text: string, color: string }[]} */
+    const captions = [];
 
     for (let i = 0; i < this._items.length; i++) {
       const item = this._items[i];
@@ -336,6 +421,14 @@ export class ScaleCanvas {
         });
       }
 
+      if (item.caption) {
+        captions.push({
+          x: originCanvasX,
+          text: item.caption,
+          color: sprite.color || "#222",
+        });
+      }
+
       cursorX += widthPx;
       if (i < this._items.length - 1) {
         cursorX += this.gapInches * ppi;
@@ -344,6 +437,18 @@ export class ScaleCanvas {
 
     for (const mark of marks) {
       drawHeightMark(ctx, mark);
+    }
+
+    if (captions.length) {
+      ctx.save();
+      ctx.font = "bold 13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      for (const cap of captions) {
+        ctx.fillStyle = cap.color;
+        ctx.fillText(cap.text, cap.x, groundY + 8);
+      }
+      ctx.restore();
     }
 
     return this;

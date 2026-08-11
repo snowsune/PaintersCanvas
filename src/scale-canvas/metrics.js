@@ -9,6 +9,7 @@ import { heightMeasureSpec, spanPixels } from "../measure.js";
  *   measure: HeightMeasure,
  *   heightMark: boolean,
  *   label?: string,
+ *   caption?: string,
  * }} PlacedSprite
  *
  * @typedef {{
