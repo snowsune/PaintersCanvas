@@ -21,7 +21,9 @@ export {
   createScaleCanvas,
   assertScaleJoints,
   canMeasureToHead,
+  formatHeightInches,
+  FINE_GRID_BELOW_INCHES,
   SCALE_JOINTS,
   SCALE_REQUIRED_JOINTS,
   SCALE_OPTIONAL_JOINTS,
-} from "./scale-canvas.js";
+} from "./scale-canvas/index.js";

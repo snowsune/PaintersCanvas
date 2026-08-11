@@ -23,6 +23,10 @@
       <span id="headScaleVal">1.00</span>
       (height inches stay fixed; only proportions change)
     </p>
+    <p>
+      <label><input id="showGrid" type="checkbox" checked /> grid</label>
+      <label><input id="showMarks" type="checkbox" checked /> height marks</label>
+    </p>
     <p id="composeNote"></p>
     <div id="host"></div>
     <ul id="list"></ul>
@@ -42,6 +46,8 @@
       const measureSelect = document.getElementById("measure");
       const headScaleInput = document.getElementById("headScale");
       const headScaleVal = document.getElementById("headScaleVal");
+      const showGrid = document.getElementById("showGrid");
+      const showMarks = document.getElementById("showMarks");
       const addBtn = document.getElementById("add");
       const clearBtn = document.getElementById("clear");
       const composeNote = document.getElementById("composeNote");
@@ -100,6 +106,15 @@
               li.append(toggle, " ");
             }
 
+            const markBtn = document.createElement("button");
+            markBtn.type = "button";
+            markBtn.textContent = item.heightMark ? "hide mark" : "show mark";
+            markBtn.onclick = () => {
+              canvas.setHeightMark(index);
+              refreshList();
+            };
+            li.append(markBtn, " ");
+
             const removeBtn = document.createElement("button");
             removeBtn.type = "button";
             removeBtn.textContent = "remove";
@@ -138,6 +153,13 @@
               log.textContent = String(err);
             });
           }, 50);
+        };
+
+        showGrid.onchange = () => {
+          canvas.setShowGrid(showGrid.checked);
+        };
+        showMarks.onchange = () => {
+          canvas.setShowHeightMarks(showMarks.checked);
         };
 
         addBtn.onclick = () => {

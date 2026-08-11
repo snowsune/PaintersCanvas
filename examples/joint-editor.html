@@ -39,9 +39,12 @@
       }
 
       function suggestNextName() {
-        if (!joints.some((j) => j.name === "origin")) {
-          jointNameInput.value = "origin";
-          return;
+        const preferred = ["origin", "head", "top-of-head"];
+        for (const name of preferred) {
+          if (!joints.some((j) => j.name === name)) {
+            jointNameInput.value = name;
+            return;
+          }
         }
         let n = 1;
         while (joints.some((j) => j.name === `joint_${n}`)) n += 1;
