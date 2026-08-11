@@ -2,7 +2,7 @@ import { assertScaleJoints, resolveMeasure } from "./joints.js";
 import { formatHeightInches } from "./format.js";
 import { heightPixels, worldMetrics } from "./metrics.js";
 import { drawGrid } from "./draw-grid.js";
-import { drawHeightMark } from "./draw-marks.js";
+import { drawHeightMark, layoutHeightMarks } from "./draw-marks.js";
 
 /**
  * @typedef {import("./joints.js").HeightMeasure} HeightMeasure
@@ -70,6 +70,8 @@ export class ScaleCanvas {
     this._items = [];
     /** @type {{ left: number, width: number, centerX: number }[]} */
     this._slots = [];
+    /** @type {{ width: number, height: number } | null} */
+    this._forceSize = null;
   }
 
   /**
@@ -215,10 +217,27 @@ export class ScaleCanvas {
       maxWidth: this.maxWidth,
       maxHeight: this.maxHeight,
       pixelRatio: this.pixelRatio,
+      forceSize: this._forceSize,
+      background: this.background,
     };
 
-    if (typeof opts.maxWidth === "number") this.maxWidth = opts.maxWidth;
-    if (typeof opts.maxHeight === "number") this.maxHeight = opts.maxHeight;
+    const frameW = opts.frameWidth;
+    const frameH = opts.frameHeight;
+
+    if (frameW && frameH) {
+      // Draw straight into the share frame so the grid can span the full width
+      this.maxWidth = frameW;
+      this.maxHeight = frameH;
+      this._forceSize = { width: frameW, height: frameH };
+      if (opts.frameBackground != null) {
+        this.background = opts.frameBackground;
+      }
+    } else {
+      if (typeof opts.maxWidth === "number") this.maxWidth = opts.maxWidth;
+      if (typeof opts.maxHeight === "number") this.maxHeight = opts.maxHeight;
+      this._forceSize = null;
+    }
+
     if (typeof opts.pixelRatio === "number") {
       this.pixelRatio = Math.max(1, Math.min(opts.pixelRatio, 3));
     } else {
@@ -229,40 +248,8 @@ export class ScaleCanvas {
     try {
       this.render();
 
-      const src = this.canvas;
-      const frameW = opts.frameWidth;
-      const frameH = opts.frameHeight;
-
-      /** @type {HTMLCanvasElement} */
-      let exportCanvas = src;
-      if (frameW && frameH) {
-        exportCanvas = document.createElement("canvas");
-        exportCanvas.width = frameW;
-        exportCanvas.height = frameH;
-        const ectx = exportCanvas.getContext("2d");
-        if (!ectx) throw new Error("exportPngBlob(): no 2d context");
-
-        const bg = opts.frameBackground ?? this.background ?? "#ffffff";
-        if (bg) {
-          ectx.fillStyle = bg;
-          ectx.fillRect(0, 0, frameW, frameH);
-        }
-
-        // canvas is already in device pixels (== css when pixelRatio is 1)
-        const sw = src.width;
-        const sh = src.height;
-        const scale = Math.min(frameW / sw, frameH / sh);
-        const dw = sw * scale;
-        const dh = sh * scale;
-        ectx.imageSmoothingEnabled = true;
-        if ("imageSmoothingQuality" in ectx) {
-          ectx.imageSmoothingQuality = "high";
-        }
-        ectx.drawImage(src, (frameW - dw) / 2, (frameH - dh) / 2, dw, dh);
-      }
-
       const blob = await new Promise((resolve, reject) => {
-        exportCanvas.toBlob(
+        this.canvas.toBlob(
           (b) => (b ? resolve(b) : reject(new Error("exportPngBlob(): toBlob failed"))),
           "image/png",
         );
@@ -272,6 +259,8 @@ export class ScaleCanvas {
       this.maxWidth = prev.maxWidth;
       this.maxHeight = prev.maxHeight;
       this.pixelRatio = prev.pixelRatio;
+      this._forceSize = prev.forceSize;
+      this.background = prev.background;
       this.render();
     }
   }
@@ -364,9 +353,16 @@ export class ScaleCanvas {
       innerMaxH / totalHeightInches,
     );
 
-    const contentLeft = pad + labelGutter;
-    const width = Math.ceil(totalWidthInches * ppi + contentLeft + pad);
-    const height = Math.ceil(totalHeightInches * ppi + pad * 2 + captionRoom);
+    const contentW = Math.ceil(totalWidthInches * ppi + pad + labelGutter + pad);
+    const contentH = Math.ceil(totalHeightInches * ppi + pad * 2 + captionRoom);
+
+    const force = this._forceSize;
+    const width = force ? force.width : contentW;
+    const height = force ? force.height : contentH;
+    // Center the lineup inside a forced frame (letterbox / pillarbox)
+    const offsetX = force ? Math.max(0, (width - contentW) / 2) : 0;
+    const offsetY = force ? Math.max(0, (height - contentH) / 2) : 0;
+
     this._setCanvasSize(width, height);
 
     if (this.background) {
@@ -376,23 +372,26 @@ export class ScaleCanvas {
       ctx.clearRect(0, 0, width, height);
     }
 
-    const groundY = pad + maxAbove * ppi;
-    const contentRight = width - pad;
+    const contentLeft = offsetX + pad + labelGutter;
+    const groundY = offsetY + pad + maxAbove * ppi;
+    // Grid always spans the full canvas (not just the sprite cluster)
+    const gridLeft = pad + labelGutter;
+    const gridRight = width - pad;
 
     if (this.showGrid) {
       drawGrid(ctx, {
         groundY,
         maxAbove,
         ppi,
-        left: contentLeft,
-        right: contentRight,
+        left: gridLeft,
+        right: gridRight,
         overallInches,
       });
     } else {
       ctx.strokeStyle = "#bbb";
       ctx.beginPath();
-      ctx.moveTo(contentLeft, groundY);
-      ctx.lineTo(contentRight, groundY);
+      ctx.moveTo(gridLeft, groundY);
+      ctx.lineTo(gridRight, groundY);
       ctx.stroke();
     }
 
@@ -434,6 +433,8 @@ export class ScaleCanvas {
           slotLeft: cursorX,
           widthPx,
           markY,
+          // full sprite top (ears/antlers may stick above the measure mark)
+          spriteTopY: groundY - m.aboveOriginInches * ppi,
           // Custom label is used as-is; otherwise name + height
           label:
             item.label ??
@@ -457,7 +458,12 @@ export class ScaleCanvas {
 
     this._slots = slots;
 
-    for (const mark of marks) {
+    const laidMarks = layoutHeightMarks(
+      ctx,
+      marks,
+      { canvasWidth: width, groundY },
+    );
+    for (const mark of laidMarks) {
       drawHeightMark(ctx, mark);
     }
 
