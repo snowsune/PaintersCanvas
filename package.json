@@ -1,0 +1,24 @@
+{
+  "name": "painters-canvas",
+  "version": "0.1.0",
+  "description": "A library for compositing character images and sprites!",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./constraints": "./src/constraints.js"
+  },
+  "files": [
+    "src"
+  ],
+  "author": "Vixi",
+  "license": "BSD",
+  "keywords": [
+    "canvas",
+    "composition",
+    "browser"
+  ],
+  "dependencies": {
+    "@lume/kiwi": "^0.4.4"
+  }
+}

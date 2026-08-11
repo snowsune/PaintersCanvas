@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>joint editor</title>
+  </head>
+  <body>
+    <h1>joint editor</h1>
+    <p>
+      image: <input id="file" type="file" accept="image/*" /><br />
+      sprite name: <input id="spriteName" type="text" value="my-sprite" /><br />
+      next joint: <input id="jointName" type="text" value="origin" /><br />
+      <button id="exportBtn" type="button" disabled>export json</button>
+      <button id="clearBtn" type="button" disabled>clear joints</button>
+    </p>
+    <p>click image to place joint. click a listed joint then click image to move. esc = deselect.</p>
+    <canvas id="canvas" style="border: 1px solid black; display: none"></canvas>
+    <ul id="jointList"></ul>
+
+    <script type="module">
+      const fileInput = document.getElementById("file");
+      const spriteNameInput = document.getElementById("spriteName");
+      const jointNameInput = document.getElementById("jointName");
+      const exportBtn = document.getElementById("exportBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const canvas = document.getElementById("canvas");
+      const jointList = document.getElementById("jointList");
+      const ctx = canvas.getContext("2d");
+
+      let image = null;
+      let imageFileName = "sprite.png";
+      /** @type {{ name: string, x: number, y: number }[]} */
+      let joints = [];
+      let selected = null;
+
+      function syncButtons() {
+        exportBtn.disabled = !image;
+        clearBtn.disabled = !image || joints.length === 0;
+      }
+
+      function suggestNextName() {
+        if (!joints.some((j) => j.name === "origin")) {
+          jointNameInput.value = "origin";
+          return;
+        }
+        let n = 1;
+        while (joints.some((j) => j.name === `joint_${n}`)) n += 1;
+        jointNameInput.value = `joint_${n}`;
+      }
+
+      function redraw() {
+        if (!image) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0);
+        for (const joint of joints) {
+          ctx.beginPath();
+          ctx.arc(joint.x, joint.y, joint.name === selected ? 5 : 3, 0, Math.PI * 2);
+          ctx.fillStyle = "red";
+          ctx.fill();
+          ctx.fillStyle = "black";
+          ctx.font = "12px sans-serif";
+          ctx.fillText(joint.name, joint.x + 6, joint.y - 6);
+        }
+      }
+
+      function renderList() {
+        jointList.replaceChildren();
+        for (const joint of joints) {
+          const li = document.createElement("li");
+          li.textContent = `${joint.name}: (${joint.x}, ${joint.y}) `;
+          if (joint.name === selected) li.style.fontWeight = "bold";
+
+          const renameBtn = document.createElement("button");
+          renameBtn.type = "button";
+          renameBtn.textContent = "rename";
+          renameBtn.onclick = (e) => {
+            e.stopPropagation();
+            const next = prompt("name", joint.name);
+            if (!next?.trim()) return;
+            const trimmed = next.trim();
+            if (trimmed !== joint.name && joints.some((j) => j.name === trimmed)) {
+              alert("name taken");
+              return;
+            }
+            if (selected === joint.name) selected = trimmed;
+            joint.name = trimmed;
+            renderList();
+            redraw();
+          };
+
+          const delBtn = document.createElement("button");
+          delBtn.type = "button";
+          delBtn.textContent = "delete";
+          delBtn.onclick = (e) => {
+            e.stopPropagation();
+            joints = joints.filter((j) => j !== joint);
+            if (selected === joint.name) selected = null;
+            renderList();
+            redraw();
+            syncButtons();
+          };
+
+          li.append(renameBtn, " ", delBtn);
+          li.onclick = () => {
+            selected = joint.name;
+            jointNameInput.value = joint.name;
+            renderList();
+            redraw();
+          };
+          jointList.append(li);
+        }
+        syncButtons();
+      }
+
+      function eventToImagePixel(event) {
+        const rect = canvas.getBoundingClientRect();
+        const x = Math.round(((event.clientX - rect.left) / rect.width) * image.naturalWidth);
+        const y = Math.round(((event.clientY - rect.top) / rect.height) * image.naturalHeight);
+        return {
+          x: Math.max(0, Math.min(image.naturalWidth - 1, x)),
+          y: Math.max(0, Math.min(image.naturalHeight - 1, y)),
+        };
+      }
+
+      function hitJoint(x, y) {
+        return joints.find((j) => Math.hypot(j.x - x, j.y - y) <= 8) || null;
+      }
+
+      fileInput.onchange = async () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        imageFileName = file.name;
+        const base = file.name.replace(/\.[^.]+$/, "");
+        spriteNameInput.value = base;
+
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = url;
+        });
+        URL.revokeObjectURL(url);
+
+        image = img;
+        joints = [];
+        selected = null;
+        suggestNextName();
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.style.display = "block";
+        redraw();
+        renderList();
+      };
+
+      canvas.onclick = (event) => {
+        if (!image) return;
+        const { x, y } = eventToImagePixel(event);
+        const hit = hitJoint(x, y);
+
+        if (hit) {
+          selected = hit.name;
+          jointNameInput.value = hit.name;
+          renderList();
+          redraw();
+          return;
+        }
+
+        if (selected) {
+          const joint = joints.find((j) => j.name === selected);
+          if (joint) {
+            joint.x = x;
+            joint.y = y;
+            renderList();
+            redraw();
+            return;
+          }
+        }
+
+        const name = jointNameInput.value.trim();
+        if (!name) {
+          alert("enter a joint name");
+          return;
+        }
+        if (joints.some((j) => j.name === name)) {
+          alert("name taken; select it to move or pick another name");
+          return;
+        }
+
+        joints.push({ name, x, y });
+        selected = null;
+        suggestNextName();
+        renderList();
+        redraw();
+      };
+
+      window.onkeydown = (event) => {
+        if (event.key === "Escape" && selected) {
+          selected = null;
+          renderList();
+          redraw();
+        }
+      };
+
+      clearBtn.onclick = () => {
+        joints = [];
+        selected = null;
+        suggestNextName();
+        renderList();
+        redraw();
+      };
+
+      exportBtn.onclick = () => {
+        if (!image) return;
+        const spriteName = spriteNameInput.value.trim() || "sprite";
+        const payload = {
+          name: spriteName,
+          image: imageFileName,
+          joints: Object.fromEntries(joints.map((j) => [j.name, { x: j.x, y: j.y }])),
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2) + "\n"], {
+          type: "application/json",
+        });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${spriteName}.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      };
+
+      syncButtons();
+    </script>
+  </body>
+</html>

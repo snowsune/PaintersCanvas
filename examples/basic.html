@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Painter's Canvas - basic</title>
+  </head>
+  <body>
+    <h1>Painter's Canvas</h1>
+    <p id="status">Loading…</p>
+    <ul id="joints"></ul>
+    <canvas id="preview" width="128" height="128" style="border: 1px solid black"></canvas>
+    <script type="module">
+      import { name, version, author, loadSprite, attachAt } from "../src/index.js";
+
+      const status = document.getElementById("status");
+      const jointsList = document.getElementById("joints");
+      const canvas = document.getElementById("preview");
+      const ctx = canvas.getContext("2d");
+
+      try {
+        const body = await loadSprite("./assets/demo-sprite-body.json");
+        const head = await loadSprite("./assets/demo-sprite-head.json");
+        const sprite = await attachAt(body, head, "head", { name: "demo-sprite" });
+
+        status.textContent = `${name} v${version} by ${author}: composed "${sprite.name}" (${sprite.width}x${sprite.height})`;
+
+        canvas.width = sprite.width;
+        canvas.height = sprite.height;
+        ctx.drawImage(sprite.image, 0, 0);
+
+        for (const [jointName, { x, y }] of Object.entries(sprite.joints)) {
+          const li = document.createElement("li");
+          li.textContent = `${jointName}: (${x}, ${y})`;
+          jointsList.appendChild(li);
+
+          ctx.beginPath();
+          ctx.arc(x, y, 3, 0, Math.PI * 2);
+          ctx.fillStyle = "red";
+          ctx.fill();
+        }
+      } catch (err) {
+        console.error(err);
+        status.textContent = `Failed: ${err.message}`;
+      }
+    </script>
+  </body>
+</html>

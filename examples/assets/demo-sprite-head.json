@@ -1,0 +1,14 @@
+{
+  "name": "demo-sprite-head",
+  "image": "demo-sprite-head.png",
+  "joints": {
+    "head": {
+      "x": 64,
+      "y": 37
+    },
+    "top": {
+      "x": 63,
+      "y": 16
+    }
+  }
+}

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>scale canvas</title>
+  </head>
+  <body>
+    <h1>scale canvas</h1>
+    <p>
+      height (inches):
+      <input id="height" type="number" value="72" min="0.1" step="any" />
+      measure:
+      <select id="measure">
+        <option value="top">top (total)</option>
+        <option value="top-of-head">top-of-head</option>
+      </select>
+      <button id="add" type="button">add</button>
+      <button id="clear" type="button">clear all</button>
+    </p>
+    <p>
+      head scale:
+      <input id="headScale" type="range" min="0.5" max="2" step="0.01" value="1" />
+      <span id="headScaleVal">1.00</span>
+      (height inches stay fixed; only proportions change)
+    </p>
+    <p id="composeNote"></p>
+    <div id="host"></div>
+    <ul id="list"></ul>
+    <pre id="log"></pre>
+    <script type="module">
+      import {
+        loadSprite,
+        attachAt,
+        createScaleCanvas,
+        canMeasureToHead,
+      } from "../src/index.js";
+
+      const log = document.getElementById("log");
+      const host = document.getElementById("host");
+      const list = document.getElementById("list");
+      const heightInput = document.getElementById("height");
+      const measureSelect = document.getElementById("measure");
+      const headScaleInput = document.getElementById("headScale");
+      const headScaleVal = document.getElementById("headScaleVal");
+      const addBtn = document.getElementById("add");
+      const clearBtn = document.getElementById("clear");
+      const composeNote = document.getElementById("composeNote");
+
+      try {
+        const body = await loadSprite("./assets/demo-sprite-body.json");
+        const head = await loadSprite("./assets/demo-sprite-head.json");
+
+        /** @type {import("../src/sprite.js").Sprite} */
+        let sprite = await attachAt(body, head, "head", {
+          name: "demo-sprite",
+          scale: 1,
+        });
+
+        function note() {
+          const origin = sprite.joint("origin");
+          const top = sprite.joint("top");
+          const heightPx = origin.y - top.y;
+          composeNote.textContent =
+            `composed at "head" (head scale ${Number(headScaleInput.value).toFixed(2)}): ` +
+            `joints: ${Object.keys(sprite.joints).join(", ")} · ` +
+            `origin to top = ${heightPx.toFixed(1)}px (world height still from your inches)`;
+        }
+
+        if (!canMeasureToHead(sprite)) {
+          measureSelect.value = "top";
+          for (const opt of measureSelect.options) {
+            if (opt.value === "top-of-head") opt.disabled = true;
+          }
+        }
+
+        const canvas = createScaleCanvas(host, { maxWidth: 700, maxHeight: 420 });
+
+        function refreshList() {
+          list.replaceChildren();
+          canvas.items.forEach((item, index) => {
+            const li = document.createElement("li");
+            li.textContent = `#${index} ${item.sprite.name}: ${item.heightInches}in (measure: ${item.measure}) `;
+
+            if (canMeasureToHead(item.sprite)) {
+              const toggle = document.createElement("button");
+              toggle.type = "button";
+              toggle.textContent =
+                item.measure === "top" ? "use top-of-head" : "use top";
+              toggle.onclick = () => {
+                canvas.setMeasure(
+                  index,
+                  item.measure === "top" ? "top-of-head" : "top",
+                );
+                refreshList();
+              };
+              li.append(toggle, " ");
+            }
+
+            const removeBtn = document.createElement("button");
+            removeBtn.type = "button";
+            removeBtn.textContent = "remove";
+            removeBtn.onclick = () => {
+              canvas.remove(index);
+              refreshList();
+            };
+
+            li.append(removeBtn);
+            list.append(li);
+          });
+
+          log.textContent = `canvas: ${canvas.canvas.width}x${canvas.canvas.height}px, ${canvas.items.length} sprite(s)`;
+        }
+
+        let rebuildTimer = 0;
+        async function rebuildHeadScale() {
+          const scale = Number(headScaleInput.value);
+          headScaleVal.textContent = scale.toFixed(2);
+          const prev = sprite;
+          sprite = await attachAt(body, head, "head", {
+            name: "demo-sprite",
+            scale,
+          });
+          canvas.replaceSprite(prev, sprite);
+          note();
+          refreshList();
+        }
+
+        headScaleInput.oninput = () => {
+          headScaleVal.textContent = Number(headScaleInput.value).toFixed(2);
+          clearTimeout(rebuildTimer);
+          rebuildTimer = setTimeout(() => {
+            rebuildHeadScale().catch((err) => {
+              console.error(err);
+              log.textContent = String(err);
+            });
+          }, 50);
+        };
+
+        addBtn.onclick = () => {
+          const heightInches = Number(heightInput.value);
+          if (!(heightInches > 0)) {
+            alert("height must be > 0");
+            return;
+          }
+          try {
+            canvas.put(sprite, {
+              heightInches,
+              measure: measureSelect.value,
+            });
+            refreshList();
+          } catch (err) {
+            alert(err.message);
+          }
+        };
+
+        clearBtn.onclick = () => {
+          canvas.clear();
+          refreshList();
+        };
+
+        canvas.put(sprite, { heightInches: 72, measure: "top" });
+        canvas.put(sprite, { heightInches: 36, measure: "top" });
+        note();
+        refreshList();
+      } catch (err) {
+        console.error(err);
+        log.textContent = String(err);
+      }
+    </script>
+  </body>
+</html>

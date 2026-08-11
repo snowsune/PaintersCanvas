@@ -1,0 +1,14 @@
+{
+  "name": "demo-sprite-body",
+  "image": "demo-sprite-body.png",
+  "joints": {
+    "origin": {
+      "x": 61,
+      "y": 116
+    },
+    "head": {
+      "x": 63,
+      "y": 45
+    }
+  }
+}
