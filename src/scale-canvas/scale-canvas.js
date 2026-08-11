@@ -68,6 +68,17 @@ export class ScaleCanvas {
 
     /** @type {PlacedSprite[]} */
     this._items = [];
+    /** @type {{ left: number, width: number, centerX: number }[]} */
+    this._slots = [];
+  }
+
+  /**
+   * Last render's per-sprite slots in CSS pixels (same space as canvas.style width).
+   * Handy for lining up UI under each character.
+   * @returns {readonly { left: number, width: number, centerX: number }[]}
+   */
+  get slots() {
+    return this._slots;
   }
 
   /**
@@ -316,6 +327,7 @@ export class ScaleCanvas {
     const labelGutter = this.showGrid ? 36 : 0;
 
     if (this._items.length === 0) {
+      this._slots = [];
       this._setCanvasSize(320, 180);
       if (this.background) {
         ctx.fillStyle = this.background;
@@ -389,6 +401,8 @@ export class ScaleCanvas {
     const marks = [];
     /** @type {{ x: number, text: string, color: string }[]} */
     const captions = [];
+    /** @type {{ left: number, width: number, centerX: number }[]} */
+    const slots = [];
 
     for (let i = 0; i < this._items.length; i++) {
       const item = this._items[i];
@@ -400,6 +414,12 @@ export class ScaleCanvas {
       const originCanvasX = cursorX + m.originXInches * ppi;
       const originCanvasY = groundY;
       const widthPx = m.widthInches * ppi;
+
+      slots.push({
+        left: cursorX,
+        width: widthPx,
+        centerX: originCanvasX,
+      });
 
       ctx.save();
       ctx.translate(originCanvasX, originCanvasY);
@@ -434,6 +454,8 @@ export class ScaleCanvas {
         cursorX += this.gapInches * ppi;
       }
     }
+
+    this._slots = slots;
 
     for (const mark of marks) {
       drawHeightMark(ctx, mark);
