@@ -37,9 +37,21 @@ export class ScaleCanvas {
    * }} [options]
    */
   constructor(target, options = {}) {
-    if (target instanceof HTMLCanvasElement) {
+    // Duck-typed so Node (@napi-rs/canvas) works without real DOM classes.
+    if (target && typeof target.getContext === "function") {
       this.canvas = target;
-    } else if (target instanceof HTMLElement) {
+    } else if (target && typeof target.appendChild === "function") {
+      this.canvas = document.createElement("canvas");
+      target.appendChild(this.canvas);
+    } else if (
+      typeof HTMLCanvasElement !== "undefined" &&
+      target instanceof HTMLCanvasElement
+    ) {
+      this.canvas = target;
+    } else if (
+      typeof HTMLElement !== "undefined" &&
+      target instanceof HTMLElement
+    ) {
       this.canvas = document.createElement("canvas");
       target.appendChild(this.canvas);
     } else {
@@ -94,8 +106,11 @@ export class ScaleCanvas {
     const h = Math.max(1, Math.ceil(cssHeight));
     this.canvas.width = Math.round(w * dpr);
     this.canvas.height = Math.round(h * dpr);
-    this.canvas.style.width = `${w}px`;
-    this.canvas.style.height = `${h}px`;
+    // Browser layout size; Node canvases may not have .style
+    if (this.canvas.style) {
+      this.canvas.style.width = `${w}px`;
+      this.canvas.style.height = `${h}px`;
+    }
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.ctx.imageSmoothingEnabled = true;
     if ("imageSmoothingQuality" in this.ctx) {
@@ -248,13 +263,21 @@ export class ScaleCanvas {
     try {
       this.render();
 
-      const blob = await new Promise((resolve, reject) => {
-        this.canvas.toBlob(
-          (b) => (b ? resolve(b) : reject(new Error("exportPngBlob(): toBlob failed"))),
-          "image/png",
-        );
-      });
-      return blob;
+      if (typeof this.canvas.toBlob === "function") {
+        return await new Promise((resolve, reject) => {
+          this.canvas.toBlob(
+            (b) =>
+              b ? resolve(b) : reject(new Error("exportPngBlob(): toBlob failed")),
+            "image/png",
+          );
+        });
+      }
+      // Node canvases expose toBuffer instead of toBlob
+      if (typeof this.canvas.toBuffer === "function") {
+        const buf = this.canvas.toBuffer("image/png");
+        return new Blob([buf], { type: "image/png" });
+      }
+      throw new Error("exportPngBlob(): canvas cannot export PNG");
     } finally {
       this.maxWidth = prev.maxWidth;
       this.maxHeight = prev.maxHeight;

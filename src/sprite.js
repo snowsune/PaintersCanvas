@@ -181,7 +181,7 @@ function loadImage(url) {
 }
 
 /**
- * Fetch a sprite JSON, load its image, optionally tint a black-on-alpha mask.
+ * Fetch a sprite JSON, load its image, then construct and return a Sprite.
  *
  * @param {string} jsonUrl URL to the `.json` metadata file
  * @param {{ color?: string }} [opts]
