@@ -1,11 +1,12 @@
 /**
- * Node entry: install a minimal DOM canvas shim via @napi-rs/canvas so the
- * browser-oriented APIs (document.createElement, Image, fetch(file:), …)
- * work under Node for server-side rendering.
+ * Node entry, do a minimal DOM canvas shim via @napi-rs/canvas so the
+ * browser stuff work under Node for server-side rendering.
  *
  *   import { installNodeCanvas } from "painters-canvas/node";
  *   await installNodeCanvas();
  *   // then import / use the rest of painters-canvas as usual
+ * 
+ * From Niku: look at Tauri?
  */
 
 import { createCanvas, Image as SkImage } from "@napi-rs/canvas";
@@ -38,7 +39,7 @@ export async function installNodeCanvas() {
     return src;
   }
 
-  // Browser-like Image: path / Buffer / data URL / http(s). file: → filesystem path.
+  // Browser-like Image: path / Buffer / data URL / http(s). file: -> filesystem path.
   globalThis.Image = class Image extends SkImage {
     /** @param {string | Buffer} value */
     set src(value) {
