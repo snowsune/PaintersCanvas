@@ -6,8 +6,7 @@
   "main": "./src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./node": "./src/node.js",
-    "./constraints": "./src/constraints.js"
+    "./node": "./src/node.js"
   },
   "files": [
     "src"
@@ -20,9 +19,6 @@
     "browser",
     "node"
   ],
-  "dependencies": {
-    "@lume/kiwi": "^0.4.4"
-  },
   "optionalDependencies": {
     "@napi-rs/canvas": "^1.0.5"
   }
